@@ -88,3 +88,7 @@ npx forge lint
 ## License
 
 MIT. See `LICENSE`.
+
+## Demo video
+
+https://youtu.be/xPjgDwJXjEI
