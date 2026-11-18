@@ -1,0 +1,143 @@
+modules:
+  jira:issuePanel:
+    - key: verification-graph-panel
+      resource: main
+      resolver:
+        function: issue-panel-resolver
+      render: native
+      title: Verification Graph
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+
+  webtrigger:
+    - key: delivery-evidence-webhook
+      function: evidence-web-trigger
+      urlFormat: v2
+      response:
+        type: dynamic
+
+  action:
+    - key: get-verification-chain
+      name: Get verification chain
+      function: vg-get-chain-fn
+      actionVerb: GET
+      description: Retrieves the normalized delivery evidence chain and gate status for a Jira issue.
+      inputs:
+        issueKey:
+          title: Jira issue key
+          type: string
+          required: true
+          description: The Jira issue key, for example ENG-123.
+
+    - key: find-missing-evidence
+      name: Find missing evidence
+      function: vg-missing-fn
+      actionVerb: GET
+      description: Lists the required delivery checks that are missing, expired, unknown, or conflicting.
+      inputs:
+        issueKey:
+          title: Jira issue key
+          type: string
+          required: true
+          description: The Jira issue key, for example ENG-123.
+
+    - key: explain-release-gate
+      name: Explain release gate
+      function: vg-explain-fn
+      actionVerb: GET
+      description: Explains why a release gate is ready or blocked, using only recorded evidence.
+      inputs:
+        issueKey:
+          title: Jira issue key
+          type: string
+          required: true
+          description: The Jira issue key, for example ENG-123.
+
+    - key: approve-release
+      name: Approve release
+      function: vg-approve-fn
+      actionVerb: CREATE
+      description: Records a human approval for the release gate of a Jira issue.
+      inputs:
+        issueKey:
+          title: Jira issue key
+          type: string
+          required: true
+          description: The Jira issue key, for example ENG-123.
+        note:
+          title: Approval note
+          type: string
+          required: false
+          description: Optional note explaining the approval.
+
+  rovo:agent:
+    - key: release-evidence-analyst
+      name: Release Evidence Analyst
+      description: Explains release readiness using only recorded delivery evidence.
+      prompt: >-
+        You are the Release Evidence Analyst for software delivery teams. Use the
+        Verification Graph actions and skill to inspect the evidence chain for the
+        current Jira issue. Never invent a pull request, test result, deployment,
+        approval, actor, or timestamp. State the gate status first, distinguish
+        MISSING, EXPIRED, and CONFLICT, and cite evidence IDs and source URLs in
+        every answer. If no evidence is returned, say that the gate is unknown and
+        ask the user to load or ingest evidence.
+      conversationStarters:
+        - Why can this release ship?
+        - What evidence is missing for this issue?
+        - Summarize the release gate with source links.
+      actions:
+        - get-verification-chain
+        - find-missing-evidence
+        - explain-release-gate
+        - approve-release
+      skills:
+        - release-gate-audit
+
+  rovo:skill:
+    - key: release-gate-audit
+      name: Release gate audit
+      source:
+        dir: skills/release-gate-audit
+      dependencies:
+        tools:
+          - get-verification-chain
+          - find-missing-evidence
+          - explain-release-gate
+
+  rovo:mcp:
+    - key: verification-graph-mcp
+      name: Verification Graph MCP
+      tools:
+        - get-verification-chain
+        - find-missing-evidence
+        - explain-release-gate
+
+  function:
+    - key: issue-panel-resolver
+      handler: index.handler
+    - key: evidence-web-trigger
+      handler: index.evidenceWebTrigger
+    - key: vg-get-chain-fn
+      handler: index.getVerificationChain
+    - key: vg-missing-fn
+      handler: index.findMissingEvidenceAction
+    - key: vg-explain-fn
+      handler: index.explainReleaseGateAction
+    - key: vg-approve-fn
+      handler: index.approveReleaseAction
+
+resources:
+  - key: main
+    path: src/frontend/index.jsx
+
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/1f836625-9fc1-401a-8057-170d6d9d94e0
+
+permissions:
+  scopes:
+    - read:jira-work
+    - storage:app
